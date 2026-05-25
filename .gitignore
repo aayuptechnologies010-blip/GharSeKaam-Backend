@@ -1,0 +1,14 @@
+node_modules
+# Keep environment variables out of version control
+.env
+.env.local
+node_modules
+dist
+
+/generated/prisma
+
+.vercel
+
+client_secret_338191065953-rbn8l7el2ubo83l88du3gnerh37jqvmt.apps.googleusercontent.com.json
+.vercel
+.env*.local

@@ -1,0 +1,191 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Category {
+  id           String     @id @default(uuid())
+  title        String
+  image        String
+  shopkeeper   Shopkeeper @relation(fields: [shopkeeperId], references: [id])
+  shopkeeperId String
+  items        Item[]
+  createdAt    DateTime   @default(now())
+}
+
+enum Unit {
+  PIECE
+  KG
+  LITRE
+  GRAM
+  PACK
+  OTHER
+}
+
+model Item {
+  id              String      @id @default(uuid())
+  title           String
+  images          String[]    @db.VarChar(255)
+  wholesaleprice  Decimal?    @db.Decimal(10, 2)
+  retailprice     Decimal?    @db.Decimal(10, 2)
+  unit            Unit
+  minimumpurchase Int         @default(0)
+  description     String
+  currentQty      Int
+  warranty        String?
+  availability    String?     @default("In Stock")
+  addons          String[]
+  discount        Float?
+  variants        Json?       // NEW: variants JSON column
+  shopkeeper      Shopkeeper  @relation(fields: [shopkeeperId], references: [id])
+  shopkeeperId    String
+  category        Category    @relation(fields: [categoryId], references: [id])
+  categoryId      String
+  orderItems      OrderItem[]
+  createdAt       DateTime    @default(now())
+}
+
+model Order {
+  id                String      @id @default(uuid())
+  customer          Customer    @relation(fields: [customerId], references: [id])
+  customerId        String
+  shopkeeper        Shopkeeper  @relation(fields: [shopkeeperId], references: [id])
+  shopkeeperId      String
+  paymentType       PaymentType
+  orderItems        OrderItem[] // RENAMED from `items`
+  totalPrice        Decimal     @db.Decimal(12, 2)
+  status            OrderStatus @default(PROCESSING)
+  deliveryAddress   Address?    @relation(fields: [deliveryAddressId], references: [id]) // NEW
+  deliveryAddressId String? // NEW
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+}
+
+model OrderItem {
+  id        String  @id @default(uuid())
+  order     Order   @relation(fields: [orderId], references: [id])
+  orderId   String
+  item      Item    @relation(fields: [itemId], references: [id])
+  itemId    String
+  quantity  Int
+  unitPrice Decimal @db.Decimal(10, 2)
+  lineTotal Decimal @db.Decimal(12, 2)
+  variants  Json?   // NEW: selected variant for this order item
+}
+
+enum DeliveryStatus {
+  PENDING
+  ASSIGNED
+  ACCEPTED
+  REJECTED
+  DELIVERED
+}
+
+enum OrderStatus {
+  PROCESSING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+  DELIVERY_PICKUP
+  DELIVERED
+}
+
+enum CustomerType {
+  WHOLESALER
+  RETAILER
+}
+
+enum PaymentType {
+  COD
+  CASH
+}
+
+// model DeliveryGuy {
+//   id      String            @id @default(uuid())
+//   userid  String            @unique
+//   user    User              @relation(fields: [userid], references: [googleid])
+//   address String?
+//   // orders  Order[]
+//   status  DeliveryGuyStatus @default(ASSIGNED)
+// }
+
+// enum DeliveryGuyStatus {
+//   ASSIGNED
+//   ACCEPTED
+//   REJECTED
+//   DELIVERED
+// }
+
+model User {
+  googleid     String      @id @unique
+  createdAt    DateTime    @default(now())
+  email        String      @unique
+  name         String?
+  phone        String?
+  profileimage String
+  customer     Customer?
+  shopkeeper   Shopkeeper?
+  // DeliveryGuy  DeliveryGuy?
+}
+
+model Customer {
+  id           String       @id @default(uuid())
+  createdAt    DateTime     @default(now())
+  userid       String       @unique
+  Shopname     String?      @unique
+  Shopnumber    String?
+  GSTnumber    String?      @unique
+  Adhaarnumber  String?      @unique
+  user         User         @relation(fields: [userid], references: [googleid])
+  houseaddress Address[]
+  type         CustomerType @default(RETAILER)
+  orders       Order[]
+}
+
+model Shopkeeper {
+  id          String     @id @default(uuid())
+  createdAt   DateTime   @default(now())
+  userid      String     @unique
+  shopname    String
+  user        User       @relation(fields: [userid], references: [googleid])
+  shopaddress Address[]
+  category    Category[]
+  Item        Item[]
+  orders      Order[]
+  shopImages  ShopkeeperImage[]
+}
+
+model ShopkeeperImage {
+  id            String     @id @default(uuid())
+  shopkeeper    Shopkeeper @relation(fields: [shopkeeperId], references: [id])
+  shopkeeperId  String
+  imageurl      String
+  description   String?
+  uploadedAt    DateTime   @default(now())
+}
+
+model Address {
+  id           String      @id @unique @default(uuid())
+  city         String
+  state        String
+  latitude     Decimal?    @db.Decimal(10, 7)
+  longitude    Decimal?    @db.Decimal(10, 7)
+  pincode      String
+  flatnumber   Int
+  customerid   String?
+  shopkeeperid String?
+  customer     Customer?   @relation(fields: [customerid], references: [id])
+  shopkeeper   Shopkeeper? @relation(fields: [shopkeeperid], references: [id])
+  orders       Order[] // NEW: reverse relation
+}

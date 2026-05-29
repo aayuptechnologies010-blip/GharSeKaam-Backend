@@ -97,7 +97,15 @@ authRouter.get(
       });
 
       if (!shopkeeper) {
-        return res.redirect(`${FRONTEND_ADMIN_URL}/error`);
+        // First-time login: generate temp token and redirect to shop setup page
+        const token = jwt.sign(
+          { userid: user.googleid },
+          process.env.JWT_SECRET,
+          { expiresIn: "30d" }
+        );
+        return res.redirect(
+          `${FRONTEND_ADMIN_URL}/oauth/callback?token=${token}&success=no&name=${encodeURIComponent(user.name)}&email=${encodeURIComponent(user.email)}`
+        );
       }
 
       const token = jwt.sign(
@@ -106,13 +114,13 @@ authRouter.get(
         { expiresIn: "30d" }
       );
 
-      // ✅ ONLY ONE RESPONSE
+      // Shopkeeper exists: redirect to dashboard
       return res.redirect(
-        `${FRONTEND_ADMIN_URL}/login?token=${token}&success=yes`
+        `${FRONTEND_ADMIN_URL}/oauth/callback?token=${token}&success=yes&name=${encodeURIComponent(user.name)}&email=${encodeURIComponent(user.email)}`
       );
     } catch (err) {
       console.error("Google callback error:", err);
-      return res.status(500).send("Authentication failed");
+      return res.redirect(`${FRONTEND_ADMIN_URL}/error?message=${encodeURIComponent(err.message || "Authentication callback failed")}`);
     }
   }
 );

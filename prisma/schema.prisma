@@ -189,3 +189,34 @@ model Address {
   shopkeeper   Shopkeeper? @relation(fields: [shopkeeperid], references: [id])
   orders       Order[] // NEW: reverse relation
 }
+
+model LabourService {
+  id         String          @id @default(uuid())
+  categoryId String          @unique // e.g. "mason", "electrician", etc.
+  title      String
+  subtitle   String
+  rate       Int
+  unit       String          @default("per day")
+  badge      String?
+  skills     String[]
+  rating     Float           @default(5.0)
+  reviews    Int             @default(0)
+  updatedAt  DateTime        @updatedAt
+  bookings   LabourBooking[]
+}
+
+model LabourBooking {
+  id              String        @id @default(uuid())
+  name            String
+  phone           String
+  address         String
+  date            String
+  days            Int           @default(1)
+  quantity        Int           @default(1)
+  totalCost       Int
+  status          String        @default("PENDING") // PENDING, ACCEPTED, COMPLETED, CANCELLED
+  labourService   LabourService @relation(fields: [labourServiceId], references: [id])
+  labourServiceId String
+  createdAt       DateTime      @default(now())
+}
+

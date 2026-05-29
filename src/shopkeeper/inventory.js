@@ -45,19 +45,27 @@ function parseAddons(addons) {
     return [];
 }
 
-// Create a new category (with image file)
+// Create a new category (with image file OR image URL)
 inventoryRouter.post('/category', shopkeeperMiddleware, upload.single('image'), async (req, res) => {
-    const { title } = req.body;
+    const { title, imageUrl } = req.body;
     const shopkeeperid = await req.shopkeeperid;
     try {
         const shopkeeper = await prisma.shopkeeper.findUnique({ where: { id: shopkeeperid } });
         if (!shopkeeper) return res.status(404).json({ success: false, message: "Shopkeeper not found" });
-        if (!req.file) return res.status(400).json({ success: false, message: "Image file is required" });
-        const imageUrl = await uploadImageBuffer(req.file.buffer);
+        
+        let imageUrlFinal;
+        if (req.file) {
+            imageUrlFinal = await uploadImageBuffer(req.file.buffer);
+        } else if (imageUrl) {
+            imageUrlFinal = imageUrl;
+        } else {
+            return res.status(400).json({ success: false, message: "Image file or image URL is required" });
+        }
+        
         const category = await prisma.category.create({
             data: {
                 title,
-                image: imageUrl,
+                image: imageUrlFinal,
                 shopkeeperId: shopkeeper.id
             }
         });
@@ -104,18 +112,27 @@ inventoryRouter.delete('/category/:id', shopkeeperMiddleware, async (req, res) =
     }
 });
 
-// Add item under a category (with up to 5 image files)
+// Add item under a category (with up to 5 image files OR image URLs)
 inventoryRouter.post('/item', shopkeeperMiddleware, upload.array('images', 5), async (req, res) => {
-    const { title, wholesaleprice, unit, description, availability, currentQty, warranty, addons, discount, categoryId, retailprice, minimumpurchase=0, variants } = req.body;
+    const { title, wholesaleprice, unit, description, availability, currentQty, warranty, addons, discount, categoryId, retailprice, minimumpurchase=0, variants, imageUrls } = req.body;
     console.log(req.body);
     const shopkeeperid = await req.shopkeeperid;
     try {
         const shopkeeper = await prisma.shopkeeper.findUnique({ where: { id: shopkeeperid } });
         if (!shopkeeper) return res.status(404).json({ success: false, message: "Shopkeeper not found" });
-        if (!req.files || req.files.length < 1 || req.files.length > 5) {
-            return res.status(400).json({ success: false, message: "You must provide between 1 and 5 image files." });
+        
+        let finalImageUrls = [];
+        if (req.files && req.files.length > 0) {
+            finalImageUrls = await uploadImageBuffers(req.files);
         }
-        const imageUrls = await uploadImageBuffers(req.files);
+        // Also accept direct image URLs
+        if (imageUrls) {
+            const urlList = Array.isArray(imageUrls) ? imageUrls : [imageUrls];
+            finalImageUrls = [...finalImageUrls, ...urlList.filter(Boolean)];
+        }
+        if (finalImageUrls.length < 1 || finalImageUrls.length > 5) {
+            return res.status(400).json({ success: false, message: "You must provide between 1 and 5 images (files or URLs)." });
+        }
 
         // Validate variants if provided
         let variantsData = undefined;
@@ -140,7 +157,7 @@ inventoryRouter.post('/item', shopkeeperMiddleware, upload.array('images', 5), a
             data: {
                 title,
                 minimumpurchase : parseInt(minimumpurchase),
-                images: imageUrls,
+                images: finalImageUrls,
                 wholesaleprice: parseFloat(wholesaleprice),
                 retailprice: parseFloat(retailprice),
                 unit,

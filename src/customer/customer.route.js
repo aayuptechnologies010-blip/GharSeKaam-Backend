@@ -1,16 +1,17 @@
 import { Router } from "express"
 import {customerInventoryRouter} from './inventory.js'
 import { customerOrdersRouter } from "./orders.js"; // import customerOrdersRouter
-// import necessary routes
 import { authRouter } from "./auth.js";
 import { addressRouter } from "./address.js";
+import { customerLabourRouter } from "./labour.js";
 
 export const customerRouter = Router();
 
 customerRouter.use('/auth', authRouter)
 customerRouter.use('/address', addressRouter)
 customerRouter.use('/inventory', customerInventoryRouter)
-customerRouter.use('/orders', customerOrdersRouter) // use customerOrdersRouter
+customerRouter.use('/orders', customerOrdersRouter)
+customerRouter.use('/labour', customerLabourRouter)
 
 
 // {

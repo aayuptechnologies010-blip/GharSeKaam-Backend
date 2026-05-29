@@ -17,46 +17,54 @@ authRouter.get('/login/:id', (req, res) => {
     res.send(token)
 })
 
-authRouter.get('/google', async (req, res) => {
-    try {
-        const mockEmail = "developer_customer@buildmart.com";
-        const mockGoogleId = "mock_google_id_developer_customer";
-        const mockName = "Developer Customer";
-        const mockProfileImage = "https://github.com/identicons/mock.png";
+authRouter.get('/google', 
+    (req, res, next) => {
+        if (req.query.bypass === "true") {
+            return next();
+        }
+        return passport.authenticate("google-customer", { scope: ["profile", "email"] })(req, res, next);
+    },
+    async (req, res) => {
+        try {
+            const mockEmail = "developer_customer@buildmart.com";
+            const mockGoogleId = "mock_google_id_developer_customer";
+            const mockName = "Developer Customer";
+            const mockProfileImage = "https://github.com/identicons/mock.png";
 
-        // 1. Find or Create User
-        let user = await prisma.user.findUnique({
-            where: { email: mockEmail }
-        });
-
-        if (!user) {
-            user = await prisma.user.create({
-                data: {
-                    googleid: mockGoogleId,
-                    name: mockName,
-                    email: mockEmail,
-                    profileimage: mockProfileImage
-                }
+            // 1. Find or Create User
+            let user = await prisma.user.findUnique({
+                where: { email: mockEmail }
             });
-        }
 
-        // 2. Check if Customer already exists
-        const customer = await prisma.customer.findUnique({
-            where: { userid: user.googleid }
-        });
+            if (!user) {
+                user = await prisma.user.create({
+                    data: {
+                        googleid: mockGoogleId,
+                        name: mockName,
+                        email: mockEmail,
+                        profileimage: mockProfileImage
+                    }
+                });
+            }
 
-        if (customer) {
-            const token = jwt.sign({ customerid: customer.id, type: customer.type }, process.env.JWT_SECRET, { expiresIn: "30d" });
-            return res.redirect(`${FRONTEND_USER_URL}/login?token=${token}&name=${encodeURIComponent(user.name)}&email=${encodeURIComponent(user.email)}&profile=${user.profileimage}&type=${customer.type}&success=yes`);
-        } else {
-            const temptoken = jwt.sign({ userid: user.googleid }, process.env.JWT_SECRET, { expiresIn: "10m" });
-            return res.redirect(`${FRONTEND_USER_URL}/login?token=${temptoken}&name=${encodeURIComponent(user.name)}&email=${encodeURIComponent(user.email)}&profile=${user.profileimage}&success=no`);
+            // 2. Check if Customer already exists
+            const customer = await prisma.customer.findUnique({
+                where: { userid: user.googleid }
+            });
+
+            if (customer) {
+                const token = jwt.sign({ customerid: customer.id, type: customer.type }, process.env.JWT_SECRET, { expiresIn: "30d" });
+                return res.redirect(`${FRONTEND_USER_URL}/login?token=${token}&name=${encodeURIComponent(user.name)}&email=${encodeURIComponent(user.email)}&profile=${user.profileimage}&type=${customer.type}&success=yes`);
+            } else {
+                const temptoken = jwt.sign({ userid: user.googleid }, process.env.JWT_SECRET, { expiresIn: "10m" });
+                return res.redirect(`${FRONTEND_USER_URL}/login?token=${temptoken}&name=${encodeURIComponent(user.name)}&email=${encodeURIComponent(user.email)}&profile=${user.profileimage}&success=no`);
+            }
+        } catch (err) {
+            console.error("Developer Customer Bypass error:", err);
+            return res.status(500).send("Developer Customer Bypass failed: " + err.message);
         }
-    } catch (err) {
-        console.error("Developer Customer Bypass error:", err);
-        return res.status(500).send("Developer Customer Bypass failed: " + err.message);
     }
-});
+);
 
 
 

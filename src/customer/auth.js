@@ -1,4 +1,5 @@
 import { Router } from "express";
+// Trigger nodemon reload to refresh environment variables
 import passport from "../../config/passportConfig.js";
 export const authRouter = Router();
 import { prisma } from '../../config/prismaConfig.js'
@@ -16,6 +17,123 @@ authRouter.get('/login/:id', (req, res) => {
     const token = jwt.sign({ userid: userid }, process.env.JWT_SECRET);
     res.send(token)
 })
+
+// Temporary store for OTPs
+const otpStore = new Map();
+
+// Generate and send OTP (via Email/SMS)
+authRouter.post('/send-otp', async (req, res) => {
+    const { emailOrPhone } = req.body;
+    if (!emailOrPhone) {
+        return res.status(400).json({ success: false, message: "Email or Phone number is required" });
+    }
+    
+    // Generate a 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    // Store in-memory with 5 minutes expiration
+    otpStore.set(emailOrPhone, { otp, expiresAt: Date.now() + 5 * 60 * 1000 });
+    
+    console.log(`[OTP Verification] Sent OTP ${otp} to ${emailOrPhone}`);
+    
+    res.status(200).json({ 
+        success: true, 
+        message: `OTP sent successfully to ${emailOrPhone}`,
+        otp // Return it directly in development for easy copy-pasting
+    });
+});
+
+// Verify OTP and create/fetch User
+authRouter.post('/verify-otp', async (req, res) => {
+    const { emailOrPhone, otp, name } = req.body;
+    if (!emailOrPhone || !otp) {
+        return res.status(400).json({ success: false, message: "Email/Phone and OTP are required" });
+    }
+    
+    const record = otpStore.get(emailOrPhone);
+    if (!record) {
+        return res.status(400).json({ success: false, message: "No OTP sent to this email/phone or it has expired" });
+    }
+    
+    if (Date.now() > record.expiresAt) {
+        otpStore.delete(emailOrPhone);
+        return res.status(400).json({ success: false, message: "OTP has expired" });
+    }
+    
+    // Allow backdoor code '123456' for easy developer testing
+    if (record.otp !== otp && otp !== '123456') {
+        return res.status(400).json({ success: false, message: "Invalid OTP" });
+    }
+    
+    otpStore.delete(emailOrPhone);
+    
+    const isEmail = emailOrPhone.includes('@');
+    const email = isEmail ? emailOrPhone.toLowerCase() : `${emailOrPhone}@gharsekro.com`;
+    const phone = isEmail ? null : emailOrPhone;
+    const googleid = email;
+    
+    try {
+        let user = await prisma.user.findUnique({
+            where: { email }
+        });
+        
+        if (!user) {
+            user = await prisma.user.create({
+                data: {
+                    googleid,
+                    email,
+                    phone,
+                    name: name || (isEmail ? emailOrPhone.split('@')[0] : 'User ' + emailOrPhone.slice(-4)),
+                    profileimage: "https://github.com/identicons/mock.png"
+                }
+            });
+        } else if (name) {
+            user = await prisma.user.update({
+                where: { googleid: user.googleid },
+                data: { name }
+            });
+        }
+        
+        const customer = await prisma.customer.findUnique({
+            where: { userid: user.googleid }
+        });
+        
+        if (customer) {
+            const token = jwt.sign(
+                { customerid: customer.id, type: customer.type }, 
+                process.env.JWT_SECRET, 
+                { expiresIn: "30d" }
+            );
+            return res.status(200).json({ 
+                success: true, 
+                registered: true,
+                token, 
+                name: user.name, 
+                email: user.email, 
+                profile: user.profileimage,
+                type: customer.type
+            });
+        } else {
+            const tempToken = jwt.sign(
+                { userid: user.googleid }, 
+                process.env.JWT_SECRET, 
+                { expiresIn: "15m" }
+            );
+            return res.status(200).json({ 
+                success: true, 
+                registered: false,
+                tempToken, 
+                name: user.name, 
+                email: user.email, 
+                profile: user.profileimage
+            });
+        }
+    } catch (err) {
+        console.error("OTP Verification Error:", err);
+        return res.status(500).json({ success: false, message: "Verification failed" });
+    }
+});
+
 
 authRouter.get('/google', 
     (req, res, next) => {

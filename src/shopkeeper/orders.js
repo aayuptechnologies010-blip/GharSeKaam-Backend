@@ -15,7 +15,7 @@ shopkeeperOrdersRouter.get('/', shopkeeperMiddleware, async (req, res) => {
       include: {
         customer: { select: { id: true } },
         orderItems: { include: { item: { select: { title: true, unit: true,  variants: true } } } },
-        deliveryAddress: { select: { city: true, state: true, pincode: true, flatnumber: true } }
+        deliveryAddress: { select: { city: true, state: true, pincode: true, flatnumber: true, latitude: true, longitude: true } }
       }
     });
     res.json({ success: true, orders });

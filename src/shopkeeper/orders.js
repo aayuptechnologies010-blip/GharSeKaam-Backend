@@ -94,3 +94,24 @@ shopkeeperOrdersRouter.patch('/:id/delivery-pickup', shopkeeperMiddleware, (req,
 
 shopkeeperOrdersRouter.patch('/:id/delivered', shopkeeperMiddleware, (req, res) =>
   transitionOrder(req, res, 'DELIVERED'));
+
+shopkeeperOrdersRouter.patch('/:id/update-delivery-time', shopkeeperMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const { estimatedDelivery } = req.body;
+  try {
+    const order = await prisma.order.findFirst({
+      where: { id, shopkeeperId: req.shopkeeperid }
+    });
+    if (!order) return res.status(404).json({ success: false, message: "Order not found" });
+
+    const updated = await prisma.order.update({
+      where: { id },
+      data: { estimatedDelivery }
+    });
+
+    res.json({ success: true, order: updated });
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});

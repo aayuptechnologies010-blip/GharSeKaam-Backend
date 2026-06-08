@@ -4,26 +4,59 @@ import { userMiddleware } from "../../middlewares/userAuth.js";
 import cloudinary from '../../config/cloudinary.js';
 import multer from 'multer';
 import { shopkeeperMiddleware } from "../../middlewares/shopkeeperAuth.js";
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Ensure the local uploads directory exists
+const rootUploadsDir = path.join(__dirname, '../../uploads');
+if (!fs.existsSync(rootUploadsDir)) {
+    fs.mkdirSync(rootUploadsDir, { recursive: true });
+}
 
 const upload = multer({ storage: multer.memoryStorage() });
 
 export const inventoryRouter = Router();
 
-// Helper to upload a single image buffer to cloudinary
-async function uploadImageBuffer(buffer) {
+// Helper to upload a single image buffer to both local folder and cloudinary
+async function uploadImageBuffer(buffer, originalname = 'image.jpg', req = null) {
+    const ext = path.extname(originalname) || '.jpg';
+    const filename = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+    const localPath = path.join(rootUploadsDir, filename);
+
+    // Save locally
+    try {
+        await fs.promises.writeFile(localPath, buffer);
+    } catch (e) {
+        console.error("Local file save failed:", e);
+    }
+
+    // Local fallback/concurrent URL
+    let localUrl = `/uploads/${filename}`;
+    if (req) {
+        localUrl = `${req.protocol}://${req.get('host')}/uploads/${filename}`;
+    }
+
+    // Try Cloudinary
     return new Promise((resolve, reject) => {
         cloudinary.uploader.upload_stream({ folder: 'buildmart' }, (err, result) => {
-            if (err) return reject(err);
+            if (err) {
+                console.error("Cloudinary upload failed, using local URL fallback:", err);
+                return resolve(localUrl); // Fallback to local URL on failure
+            }
             resolve(result.secure_url);
         }).end(buffer);
     });
 }
 
-// Helper to upload multiple image buffers to cloudinary
-async function uploadImageBuffers(files) {
+// Helper to upload multiple image buffers to both local folder and cloudinary
+async function uploadImageBuffers(files, req = null) {
     const urls = [];
     for (const file of files) {
-        const url = await uploadImageBuffer(file.buffer);
+        const url = await uploadImageBuffer(file.buffer, file.originalname, req);
         urls.push(url);
     }
     return urls;
@@ -55,7 +88,7 @@ inventoryRouter.post('/category', shopkeeperMiddleware, upload.single('image'), 
         
         let imageUrlFinal;
         if (req.file) {
-            imageUrlFinal = await uploadImageBuffer(req.file.buffer);
+            imageUrlFinal = await uploadImageBuffer(req.file.buffer, req.file.originalname, req);
         } else if (imageUrl) {
             imageUrlFinal = imageUrl;
         } else {
@@ -83,7 +116,7 @@ inventoryRouter.put('/category/:id', shopkeeperMiddleware, upload.single('image'
     try {
         let updateData = {};
         if (title) updateData.title = title;
-        if (req.file) updateData.image = await uploadImageBuffer(req.file.buffer);
+        if (req.file) updateData.image = await uploadImageBuffer(req.file.buffer, req.file.originalname, req);
         const category = await prisma.category.update({
             where: { id },
             data: updateData
@@ -123,7 +156,7 @@ inventoryRouter.post('/item', shopkeeperMiddleware, upload.array('images', 5), a
         
         let finalImageUrls = [];
         if (req.files && req.files.length > 0) {
-            finalImageUrls = await uploadImageBuffers(req.files);
+            finalImageUrls = await uploadImageBuffers(req.files, req);
         }
         // Also accept direct image URLs
         if (imageUrls) {
@@ -139,13 +172,21 @@ inventoryRouter.post('/item', shopkeeperMiddleware, upload.array('images', 5), a
         if (variants) {
             try {
                 variantsData = JSON.parse(variants);
-                // Example validation: variants should be an array of objects with size and price
                 if (!Array.isArray(variantsData)) {
                     return res.status(400).json({ success: false, message: "Variants must be an array." });
                 }
                 for (const v of variantsData) {
-                    if (!v.size || typeof v.price !== 'number') {
-                        return res.status(400).json({ success: false, message: "Each variant must have a size and price (number)." });
+                    if (!v.size) {
+                        return res.status(400).json({ success: false, message: "Each variant must have a size." });
+                    }
+                    if (v.price !== undefined && v.price !== null && typeof v.price !== 'number') {
+                        return res.status(400).json({ success: false, message: "Variant price must be a number." });
+                    }
+                    if (v.wholesaleprice !== undefined && v.wholesaleprice !== null && typeof v.wholesaleprice !== 'number') {
+                        return res.status(400).json({ success: false, message: "Variant wholesaleprice must be a number." });
+                    }
+                    if ((v.price === undefined || v.price === null) && (v.wholesaleprice === undefined || v.wholesaleprice === null)) {
+                        return res.status(400).json({ success: false, message: "Each variant must have at least a retail price or wholesale price." });
                     }
                 }
             } catch (e) {
@@ -187,7 +228,7 @@ inventoryRouter.post('/shop-image', shopkeeperMiddleware, upload.single('image')
         const shopkeeper = await prisma.shopkeeper.findUnique({ where: { id: shopkeeperid } });
         if (!shopkeeper) return res.status(404).json({ success: false, message: "Shopkeeper not found" });
         if (!req.file) return res.status(400).json({ success: false, message: "Image file is required" });
-        const imageurl = await uploadImageBuffer(req.file.buffer);
+        const imageurl = await uploadImageBuffer(req.file.buffer, req.file.originalname, req);
         const shopImage = await prisma.shopkeeperImage.create({
             data: {
                 imageurl,
@@ -245,7 +286,7 @@ inventoryRouter.put('/shop-image/:id', shopkeeperMiddleware, upload.single('imag
         if (existing.shopkeeperId !== shopkeeperid) return res.status(403).json({ success: false, message: 'Not authorized to update this image' });
         const updateData = {};
         if (description !== undefined) updateData.description = description;
-        if (req.file) updateData.imageurl = await uploadImageBuffer(req.file.buffer);
+        if (req.file) updateData.imageurl = await uploadImageBuffer(req.file.buffer, req.file.originalname, req);
         const updated = await prisma.shopkeeperImage.update({ where: { id }, data: updateData });
         res.status(200).json({ success: true, updated });
     } catch (err) {
@@ -272,7 +313,7 @@ inventoryRouter.delete('/shop-image/:id', shopkeeperMiddleware, async (req, res)
 
 // Update item (fields and images)
 inventoryRouter.put('/item/:id', shopkeeperMiddleware, upload.array('images', 5), async (req, res) => {
-    const { minimumpurchase, title, wholesaleprice, retailprice, unit, description, currentQty, warranty, addons, discount, categoryId, variants } = req.body;
+    const { availability, minimumpurchase, title, wholesaleprice, retailprice, unit, description, currentQty, warranty, addons, discount, categoryId, variants } = req.body;
     const { id } = req.params;
     try {
         let updateData = {};
@@ -286,8 +327,17 @@ console.log(req.body);
                     return res.status(400).json({ success: false, message: "Variants must be an array." });
                 }
                 for (const v of variantsData) {
-                    if (!v.size || typeof v.price !== 'number') {
-                        return res.status(400).json({ success: false, message: "Each variant must have a size and price (number)." });
+                    if (!v.size) {
+                        return res.status(400).json({ success: false, message: "Each variant must have a size." });
+                    }
+                    if (v.price !== undefined && v.price !== null && typeof v.price !== 'number') {
+                        return res.status(400).json({ success: false, message: "Variant price must be a number." });
+                    }
+                    if (v.wholesaleprice !== undefined && v.wholesaleprice !== null && typeof v.wholesaleprice !== 'number') {
+                        return res.status(400).json({ success: false, message: "Variant wholesaleprice must be a number." });
+                    }
+                    if ((v.price === undefined || v.price === null) && (v.wholesaleprice === undefined || v.wholesaleprice === null)) {
+                        return res.status(400).json({ success: false, message: "Each variant must have at least a retail price or wholesale price." });
                     }
                 }
             } catch (e) {
@@ -296,11 +346,12 @@ console.log(req.body);
         }
 
         if (title) updateData.title = title;
+        if (availability) updateData.availability = availability;
         if (req.files && req.files.length > 0) {
             if (req.files.length < 1 || req.files.length > 5) {
                 return res.status(400).json({ success: false, message: "You must provide between 1 and 5 image files." });
             }
-            updateData.images = await uploadImageBuffers(req.files);
+            updateData.images = await uploadImageBuffers(req.files, req);
         }
         if (wholesaleprice) updateData.wholesaleprice = parseFloat(wholesaleprice);
         if (retailprice) updateData.retailprice = parseFloat(retailprice);

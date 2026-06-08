@@ -4,6 +4,19 @@ import { shopkeeperMiddleware } from "../../middlewares/shopkeeperAuth.js";
 
 export const shopkeeperLabourRouter = Router();
 
+// Get all labour categories with live daily rates for shopkeepers
+shopkeeperLabourRouter.get("/categories", shopkeeperMiddleware, async (req, res) => {
+  try {
+    const categories = await prisma.labourService.findMany({
+      orderBy: { rate: "asc" }
+    });
+    res.status(200).json({ success: true, categories });
+  } catch (err) {
+    console.error("Error fetching categories:", err);
+    res.status(500).json({ success: false, message: "Something went wrong" });
+  }
+});
+
 // 1. Get all customer bookings (for admin log)
 shopkeeperLabourRouter.get("/bookings", shopkeeperMiddleware, async (req, res) => {
   try {

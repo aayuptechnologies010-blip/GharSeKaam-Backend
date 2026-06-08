@@ -9,6 +9,9 @@ addressRouter.post('/add', customerMiddleware, async (req, res) => {
     const { city, state, pincode, flatnumber, shopname, shopnumber, gstnumber, adhaarnumber, type, latitude, longitude } = req.body;
     const customerid = req.customerid;
     try {
+        if (!city || !state || state.toLowerCase() !== 'uttar pradesh' || city.toLowerCase() !== 'gorakhpur') {
+            return res.status(400).json({ success: false, message: "Sorry, currently we are not working in your city. We only operate in Gorakhpur." });
+        }
         const customer = await prisma.customer.findUnique({ where: { id: customerid } });
         if (!customer) {
             return res.status(404).json({ success: false, message: "Customer not found" });

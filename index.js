@@ -4,10 +4,14 @@ import dotenv from 'dotenv'
 import passport from 'passport'
 import session from 'express-session'
 import cookie from 'cookie-parser'
+import path from 'path'
+import { fileURLToPath } from 'url'
 
 import { customerRouter } from './src/customer/customer.route.js'
 import { shopkeeperRouter } from './src/shopkeeper/shopkeeper.route.js'
 
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 // configurations
 const app = express();
@@ -31,6 +35,9 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(passport.initialize());
 app.use(passport.session());
+
+// Serve static uploads
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // middlewares and routings
 

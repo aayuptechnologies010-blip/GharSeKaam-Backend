@@ -68,6 +68,7 @@ model Order {
   status            OrderStatus @default(PROCESSING)
   deliveryAddress   Address?    @relation(fields: [deliveryAddressId], references: [id]) // NEW
   deliveryAddressId String? // NEW
+  estimatedDelivery String?     @default("Within 2-3 hours")
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
 }

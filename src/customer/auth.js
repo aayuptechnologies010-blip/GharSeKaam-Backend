@@ -218,6 +218,10 @@ authRouter.get('/google/callback', passport.authenticate('google-customer', { fa
 authRouter.post("/signup", userMiddleware, async (req, res) => {
     const { city, state, pincode, flatnumber, phone, type } = req.body;
 
+    if (!city || !state || state.toLowerCase() !== 'uttar pradesh' || city.toLowerCase() !== 'gorakhpur') {
+        return res.status(400).json({ success: false, message: "Sorry, currently we are not working in your city. We only operate in Gorakhpur." });
+    }
+
     const userid = await req.userid;
     const user = await prisma.user.findUnique({
         where: {

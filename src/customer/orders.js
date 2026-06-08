@@ -94,6 +94,13 @@ customerOrdersRouter.post('/', customerMiddleware, async (req, res) => {
             });
         }
 
+        // Calculate default estimated delivery based on hour of order
+        const currentHour = new Date().getHours();
+        let estimatedDelivery = "Within 2 Hours";
+        if (currentHour >= 18 || currentHour < 8) { // 6 PM to 8 AM
+            estimatedDelivery = "Tomorrow before 11:00 AM";
+        }
+
         const created = await prisma.order.create({
             data: {
                 customerId: customer.id,
@@ -101,6 +108,7 @@ customerOrdersRouter.post('/', customerMiddleware, async (req, res) => {
                 paymentType,
                 totalPrice: total,
                 deliveryAddressId: addressId,
+                estimatedDelivery,
                 orderItems: { create: orderItemsData }
             },
             include: {
@@ -142,6 +150,7 @@ customerOrdersRouter.get('/', customerMiddleware, async (req, res) => {
             totalPrice: o.totalPrice,
             status: o.status,
             createdAt: o.createdAt,
+            estimatedDelivery: o.estimatedDelivery,
             orderItems: o.orderItems.map(oi => ({
                 id: oi.id,
                 quantity: oi.quantity,

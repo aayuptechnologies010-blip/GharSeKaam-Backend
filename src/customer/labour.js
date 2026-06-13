@@ -100,7 +100,26 @@ customerLabourRouter.get("/categories", async (req, res) => {
   }
 });
 
-// 2. Book a labourer service
+// 2. Get bookings by phone number (customer ke apne bookings)
+customerLabourRouter.get("/mybookings", async (req, res) => {
+  const phone = req.query.phone;
+  if (!phone) {
+    return res.status(400).json({ success: false, message: "phone query param required" });
+  }
+  try {
+    const bookings = await prisma.labourBooking.findMany({
+      where: { phone },
+      orderBy: { createdAt: "desc" },
+      include: { labourService: true }
+    });
+    res.status(200).json({ success: true, bookings });
+  } catch (err) {
+    console.error("Error fetching customer labour bookings:", err);
+    res.status(500).json({ success: false, message: "Something went wrong" });
+  }
+});
+
+// 3. Book a labourer service
 customerLabourRouter.post("/book", async (req, res) => {
   const { name, phone, address, date, days = 1, quantity = 1, categoryId } = req.body;
 

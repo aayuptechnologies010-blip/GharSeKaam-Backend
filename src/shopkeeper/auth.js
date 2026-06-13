@@ -165,7 +165,7 @@ authRouter.post("/signup", userMiddleware, async (req, res) => {
             city,
             state,
             pincode,
-            flatnumber: parseInt(flatnumber, 10) || 0,
+            flatnumber: String(flatnumber || ""),
           },
         });
       }
@@ -182,7 +182,7 @@ authRouter.post("/signup", userMiddleware, async (req, res) => {
                   city,
                   state,
                   pincode,
-                  flatnumber: parseInt(flatnumber, 10) || 0,
+                  flatnumber: String(flatnumber || ""),
                 },
               },
             },

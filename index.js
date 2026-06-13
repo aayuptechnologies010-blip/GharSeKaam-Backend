@@ -6,9 +6,12 @@ import session from 'express-session'
 import cookie from 'cookie-parser'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import http from 'http'
+import { initWebSocket } from './socket.js'
 
 import { customerRouter } from './src/customer/customer.route.js'
 import { shopkeeperRouter } from './src/shopkeeper/shopkeeper.route.js'
+import { deliveryRouter } from './src/delivery/delivery.route.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -48,6 +51,7 @@ app.get('/', (req, res) => {
 
 app.use('/api/v1/user', customerRouter)
 app.use('/api/v1/owner', shopkeeperRouter)
+app.use('/api/v1/delivery', deliveryRouter)
 
 
 app.get(/(.*)/, (req, res) => {
@@ -55,7 +59,10 @@ app.get(/(.*)/, (req, res) => {
 });
 
 
-app.listen(process.env.PORT || 3000, (req, res, next) => {
+const server = http.createServer(app);
+initWebSocket(server);
+
+server.listen(process.env.PORT || 3000, () => {
     console.log('app is listening on port : ', process.env.PORT || 3000);
 })
 

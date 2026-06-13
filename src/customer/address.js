@@ -29,7 +29,7 @@ addressRouter.post('/add', customerMiddleware, async (req, res) => {
                 city,
                 state,
                 pincode,
-                flatnumber,
+                flatnumber: String(flatnumber || ""),
                 // include lat/lng when provided
                 ...(latitude !== undefined && latitude !== null ? { latitude: parseFloat(latitude) } : {}),
                 ...(longitude !== undefined && longitude !== null ? { longitude: parseFloat(longitude) } : {}),

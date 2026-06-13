@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { prisma } from '../../config/prismaConfig.js' // adjust path
 import { shopkeeperMiddleware } from "../../middlewares/shopkeeperAuth.js";
+import { sendToCustomer, broadcastToRiders } from "../../socket.js";
 
 export const shopkeeperOrdersRouter = Router();
 
@@ -74,6 +75,16 @@ async function transitionOrder(req, res, targetStatus) {
     });
 
     res.json({ success: true, order: result });
+
+    // Send real-time updates via WebSockets
+    try {
+      sendToCustomer(order.customerId, 'ORDER_STATUS_UPDATE', result);
+      if (targetStatus === 'ACCEPTED') {
+        broadcastToRiders('NEW_AVAILABLE_ORDER', result);
+      }
+    } catch (wsErr) {
+      console.error("WS Broadcast failed in transitionOrder:", wsErr.message);
+    }
   } catch (err) {
     console.log(err);
     res.status(400).json({ success: false, message: err.message || "Transition failed" });
@@ -112,6 +123,76 @@ shopkeeperOrdersRouter.patch('/:id/update-delivery-time', shopkeeperMiddleware, 
     res.json({ success: true, order: updated });
   } catch (err) {
     console.log(err);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
+/**
+ * Get all registered delivery guys / riders
+ */
+shopkeeperOrdersRouter.get('/delivery-guys', shopkeeperMiddleware, async (req, res) => {
+  try {
+    const riders = await prisma.deliveryGuy.findMany({
+      include: {
+        user: {
+          select: {
+            name: true,
+            email: true,
+            phone: true,
+            profileimage: true
+          }
+        }
+      }
+    });
+    res.json({ success: true, riders });
+  } catch (err) {
+    console.error("Failed to fetch delivery guys list:", err);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
+
+/**
+ * Manually assign an order to a delivery guy / rider
+ */
+shopkeeperOrdersRouter.patch('/:id/assign', shopkeeperMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const { deliveryGuyId } = req.body;
+  try {
+    const order = await prisma.order.findFirst({
+      where: { id, shopkeeperId: req.shopkeeperid }
+    });
+    if (!order) return res.status(404).json({ success: false, message: "Order not found" });
+
+    const rider = await prisma.deliveryGuy.findUnique({
+      where: { id: deliveryGuyId }
+    });
+    if (!rider) return res.status(404).json({ success: false, message: "Rider not found" });
+
+    const updated = await prisma.order.update({
+      where: { id },
+      data: {
+        deliveryGuyId
+      },
+      include: {
+        deliveryAddress: true,
+        deliveryGuy: {
+          include: {
+            user: { select: { name: true, phone: true } }
+          }
+        }
+      }
+    });
+
+    res.json({ success: true, order: updated });
+
+    // Send WebSocket notification to the customer about assignment
+    try {
+      sendToCustomer(order.customerId, 'ORDER_STATUS_UPDATE', updated);
+    } catch (wsErr) {
+      console.error("WS Broadcast failed in assignOrder:", wsErr.message);
+    }
+  } catch (err) {
+    console.error("Failed to assign order:", err);
     res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 });

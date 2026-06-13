@@ -418,10 +418,18 @@ inventoryRouter.get('/categories', shopkeeperMiddleware, async (req, res) => {
                 id: true,
                 title: true,
                 image: true,
-                createdAt: true
+                createdAt: true,
+                _count: { select: { items: true } }
             }
         });
-        res.status(200).json({ success: true, categories });
+        const result = categories.map(c => ({
+            id: c.id,
+            title: c.title,
+            image: c.image,
+            createdAt: c.createdAt,
+            itemCount: c._count.items
+        }));
+        res.status(200).json({ success: true, categories: result });
     } catch (err) {
         console.error(err);
         res.status(500).json({ success: false, message: "Something went wrong" });

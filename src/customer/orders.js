@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { prisma } from '../../config/prismaConfig.js' // adjust path if different
 import { customerMiddleware } from "../../middlewares/customerAuth.js";
+import { sendToShopkeeper } from "../../socket.js";
 
 export const customerOrdersRouter = Router();
 
@@ -10,7 +11,7 @@ customerOrdersRouter.post('/', customerMiddleware, async (req, res) => {
     if (!addressId) return res.status(400).json({ success: false, message: "addressId required" });
     if (!Array.isArray(items) || items.length === 0)
         return res.status(400).json({ success: false, message: "items required" });
-    if (!paymentType || !["COD", "CASH"].includes(paymentType))
+    if (!paymentType || !["COD", "CASH", "ONLINE"].includes(paymentType))
         return res.status(400).json({ success: false, message: "invalid paymentType" });
 
     try {
@@ -117,6 +118,13 @@ customerOrdersRouter.post('/', customerMiddleware, async (req, res) => {
             }
         });
 
+        // Broadcast order to the shopkeeper in real-time
+        try {
+            sendToShopkeeper(shopkeeperId, 'NEW_ORDER', created);
+        } catch (wsErr) {
+            console.error("WS Broadcast failed in placeOrder:", wsErr.message);
+        }
+
         return res.json({ success: true, order: created });
     } catch (err) {
         console.log(err);
@@ -139,7 +147,12 @@ customerOrdersRouter.get('/', customerMiddleware, async (req, res) => {
                     }
                 },
                 shopkeeper: { select: { shopname: true } },
-                deliveryAddress: { select: { city: true, state: true, pincode: true, flatnumber: true, latitude: true, longitude: true } }
+                deliveryAddress: { select: { city: true, state: true, pincode: true, flatnumber: true, latitude: true, longitude: true } },
+                deliveryGuy: {
+                    include: {
+                        user: { select: { name: true, phone: true, profileimage: true } }
+                    }
+                }
             }
         });
 
@@ -160,7 +173,14 @@ customerOrdersRouter.get('/', customerMiddleware, async (req, res) => {
                 item: oi.item
             })),
             shopkeeper: o.shopkeeper,
-            deliveryAddress: o.deliveryAddress
+            deliveryAddress: o.deliveryAddress,
+            deliveryGuy: o.deliveryGuy ? {
+                id: o.deliveryGuy.id,
+                name: o.deliveryGuy.user.name,
+                phone: o.deliveryGuy.user.phone,
+                profileimage: o.deliveryGuy.user.profileimage,
+                status: o.deliveryGuy.status
+            } : null
         }));
 
         res.json({ success: true, orders: shaped });
@@ -180,7 +200,12 @@ customerOrdersRouter.get('/:id', customerMiddleware, async (req, res) => {
             include: {
                 orderItems: { include: { item: { select: { title: true, images: true, unit: true } } } },
                 shopkeeper: { select: { shopname: true } },
-                deliveryAddress: { select: { city: true, state: true, pincode: true, flatnumber: true, latitude: true, longitude: true } }
+                deliveryAddress: { select: { city: true, state: true, pincode: true, flatnumber: true, latitude: true, longitude: true } },
+                deliveryGuy: {
+                    include: {
+                        user: { select: { name: true, phone: true, profileimage: true } }
+                    }
+                }
             }
         });
         if (!order) return res.status(404).json({ success: false, message: "Not found" });

@@ -69,6 +69,8 @@ model Order {
   deliveryAddress   Address?    @relation(fields: [deliveryAddressId], references: [id]) // NEW
   deliveryAddressId String? // NEW
   estimatedDelivery String?     @default("Within 2-3 hours")
+  deliveryGuyId     String?
+  deliveryGuy       DeliveryGuy? @relation(fields: [deliveryGuyId], references: [id])
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
 }
@@ -110,23 +112,24 @@ enum CustomerType {
 enum PaymentType {
   COD
   CASH
+  ONLINE
 }
 
-// model DeliveryGuy {
-//   id      String            @id @default(uuid())
-//   userid  String            @unique
-//   user    User              @relation(fields: [userid], references: [googleid])
-//   address String?
-//   // orders  Order[]
-//   status  DeliveryGuyStatus @default(ASSIGNED)
-// }
+model DeliveryGuy {
+  id        String            @id @default(uuid())
+  userid    String            @unique
+  user      User              @relation(fields: [userid], references: [googleid])
+  address   String?
+  orders    Order[]
+  status    DeliveryGuyStatus @default(AVAILABLE)
+  createdAt DateTime          @default(now())
+}
 
-// enum DeliveryGuyStatus {
-//   ASSIGNED
-//   ACCEPTED
-//   REJECTED
-//   DELIVERED
-// }
+enum DeliveryGuyStatus {
+  AVAILABLE
+  BUSY
+  INACTIVE
+}
 
 model User {
   googleid     String      @id @unique
@@ -137,7 +140,7 @@ model User {
   profileimage String
   customer     Customer?
   shopkeeper   Shopkeeper?
-  // DeliveryGuy  DeliveryGuy?
+  deliveryGuy  DeliveryGuy?
 }
 
 model Customer {
@@ -183,7 +186,7 @@ model Address {
   latitude     Decimal?    @db.Decimal(10, 7)
   longitude    Decimal?    @db.Decimal(10, 7)
   pincode      String
-  flatnumber   Int
+  flatnumber   String
   customerid   String?
   shopkeeperid String?
   customer     Customer?   @relation(fields: [customerid], references: [id])

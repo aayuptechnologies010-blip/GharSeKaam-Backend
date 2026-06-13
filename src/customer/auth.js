@@ -255,7 +255,7 @@ authRouter.post("/signup", userMiddleware, async (req, res) => {
             const addressId = customer.houseaddress[0].id;
             const updatedAddress = await prisma.address.update({
                 where: { id: addressId },
-                data: { city, state, pincode, flatnumber: parseInt(flatnumber, 10) || 0 }
+                data: { city, state, pincode, flatnumber: String(flatnumber || "") }
             });
 
             const token = jwt.sign({ customerid: customer.id }, process.env.JWT_SECRET, { expiresIn: "30d" });
@@ -277,7 +277,7 @@ authRouter.post("/signup", userMiddleware, async (req, res) => {
                                         city,
                                         state,
                                         pincode,
-                                        flatnumber: parseInt(flatnumber, 10) || 0
+                                        flatnumber: String(flatnumber || "")
                                     }
                                 }
                             }

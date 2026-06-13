@@ -49,7 +49,7 @@ customerInventoryRouter.get('/items', (req, res, next) => {
     }
 });
 
-customerInventoryRouter.get('/shop-Images', async (req, res) => {
+customerInventoryRouter.get('/shop-images', async (req, res) => {
     try {
         const shopImages = await prisma.shopkeeperImage.findMany({
             select: {
